@@ -17,7 +17,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 
-DATA_DIR = "data"  # folder containing cairo.txt, paris.txt, bangkok.txt, lisbon.txt
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 CITY_FILES = {
     "Cairo": "cairo.txt",

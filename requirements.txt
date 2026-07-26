@@ -1,0 +1,8 @@
+streamlit
+langchain-core
+langchain-groq
+sentence-transformers
+faiss-cpu
+pydantic
+matplotlib
+fpdf2

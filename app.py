@@ -16,6 +16,69 @@ from pipeline import extract_preferences, build_itinerary, regenerate_day
 # ---------- Page config ----------
 st.set_page_config(page_title="Travel Itinerary Planner", page_icon="🧭", layout="wide")
 
+# ---------- Light styling pass: palette, spacing, card-style days ----------
+ACCENT = "#E76F51"       # warm coral accent (buttons, highlights)
+ACCENT_SOFT = "#F4A896"  # lighter accent for secondary bits
+BG_CARD = "#FAF6F1"      # warm off-white for day cards
+TEXT_MUTED = "#7A736C"
+
+st.markdown(f"""
+<style>
+    /* Overall spacing */
+    .block-container {{
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+    }}
+
+    /* Buttons */
+    .stButton > button[kind="primary"] {{
+        background-color: {ACCENT};
+        border: none;
+    }}
+    .stButton > button[kind="primary"]:hover {{
+        background-color: {ACCENT_SOFT};
+    }}
+    .stButton > button:not([kind="primary"]) {{
+        border: 1px solid {ACCENT};
+        color: {ACCENT};
+    }}
+    .stButton > button:not([kind="primary"]):hover {{
+        border-color: {ACCENT_SOFT};
+        color: {ACCENT_SOFT};
+    }}
+
+    /* Metric (trip total) */
+    div[data-testid="stMetric"] {{
+        background-color: {BG_CARD};
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        border-left: 4px solid {ACCENT};
+    }}
+
+    /* Day cards */
+    .day-card {{
+        background-color: {BG_CARD};
+        border-radius: 12px;
+        padding: 1.2rem 1.4rem;
+        margin-bottom: 1rem;
+        border-left: 4px solid {ACCENT};
+    }}
+    .day-card h3 {{
+        margin-top: 0;
+        color: {ACCENT};
+    }}
+    .activity-cost {{
+        color: {ACCENT};
+        font-weight: 600;
+    }}
+    .day-total {{
+        color: {TEXT_MUTED};
+        font-size: 0.95rem;
+        margin-top: 0.5rem;
+    }}
+</style>
+""", unsafe_allow_html=True)
+
 # ---------- API key ----------
 if "GROQ_API_KEY" not in os.environ:
     key = st.sidebar.text_input("Groq API Key", type="password")
@@ -77,11 +140,16 @@ if st.session_state.itinerary:
     st.metric("Trip total", f"${itinerary.trip_total:.0f}")
 
     for day in itinerary.days:
+        st.markdown('<div class="day-card">', unsafe_allow_html=True)
         st.markdown(f"### Day {day.day}")
         for act in day.activities:
-            st.markdown(f"**{act.name}** — ${act.cost_est:.0f} · _{act.type}_")
+            st.markdown(
+                f"**{act.name}** — <span class='activity-cost'>${act.cost_est:.0f}</span> · _{act.type}_",
+                unsafe_allow_html=True,
+            )
             st.caption(act.reason)
-        st.markdown(f"**Daily total: ${day.daily_total:.0f}**")
+        st.markdown(f"<div class='day-total'>Daily total: <b>${day.daily_total:.0f}</b></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
         avoid_note = st.text_input(
             "Anything to avoid or change for this day? (optional)",
@@ -115,7 +183,7 @@ if st.session_state.itinerary:
     day_totals = [d.daily_total for d in itinerary.days]
 
     fig, ax = plt.subplots(figsize=(6, 3))
-    ax.bar(day_labels, day_totals, color="#2E86AB")
+    ax.bar(day_labels, day_totals, color=ACCENT)
     ax.set_ylabel("Cost (USD)")
     ax.set_title(f"Daily cost — {itinerary.city}")
     for i, v in enumerate(day_totals):

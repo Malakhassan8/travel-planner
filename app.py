@@ -17,14 +17,15 @@ from pipeline import extract_preferences, build_itinerary, regenerate_day
 st.set_page_config(page_title="Travel Itinerary Planner", page_icon="🧭", layout="wide")
 
 # ---------- Styling pass: palette, spacing, card-style days ----------
-ACCENT = "#E76F51"       # warm coral accent (buttons, highlights)
-ACCENT_SOFT = "#F4A896"  # lighter accent for secondary bits
-BG_APP = "#2B2420"       # dark warm brown — main app background
-BG_CARD = "#FAF6F1"      # warm off-white for day cards, pops against dark bg
-BG_SIDEBAR = "#231D19"   # slightly darker than main bg for sidebar
-TEXT_LIGHT = "#F0EAE3"   # main body text on dark background
-TEXT_MUTED = "#B0A89E"   # secondary/caption text on dark background
-TEXT_MUTED_ON_CARD = "#7A736C"  # secondary text on light cards
+ACCENT = "#3D7EA6"        # medium blue accent (buttons, highlights, borders)
+ACCENT_SOFT = "#7FB3D5"   # baby blue for hover/secondary bits
+BG_APP = "#152238"        # dark navy — main app background
+BG_CARD = "#EAF4FB"       # baby-blue-tinted off-white for day cards
+BG_SIDEBAR = "#0F1A2B"    # darker navy for sidebar
+TEXT_LIGHT = "#E7F0F8"    # main body text on dark background
+TEXT_MUTED = "#9FB3C8"    # secondary/caption text on dark background
+TEXT_DARK_ON_CARD = "#152238"    # strong dark navy text on light cards (numbers, headers)
+TEXT_MUTED_ON_CARD = "#5A6B7D"   # secondary text on light cards
 
 st.markdown(f"""
 <style>
@@ -52,7 +53,7 @@ st.markdown(f"""
     /* Text input / text area fields */
     .stTextInput input, .stTextArea textarea {{
         background-color: {BG_CARD};
-        color: #2B2420;
+        color: {TEXT_DARK_ON_CARD};
         border-radius: 8px;
     }}
 
@@ -71,23 +72,29 @@ st.markdown(f"""
         background-color: {ACCENT_SOFT};
     }}
     .stButton > button:not([kind="primary"]) {{
-        border: 1px solid {ACCENT};
-        color: {ACCENT};
-    }}
-    .stButton > button:not([kind="primary"]):hover {{
-        border-color: {ACCENT_SOFT};
+        border: 1px solid {ACCENT_SOFT};
         color: {ACCENT_SOFT};
     }}
+    .stButton > button:not([kind="primary"]):hover {{
+        border-color: {ACCENT};
+        color: {ACCENT};
+    }}
 
-    /* Metric (trip total) */
+    /* Metric (trip total) — target the specific testids so the value is never invisible */
     div[data-testid="stMetric"] {{
         background-color: {BG_CARD};
         border-radius: 10px;
         padding: 0.75rem 1rem;
         border-left: 4px solid {ACCENT};
     }}
-    div[data-testid="stMetric"] label, div[data-testid="stMetric"] div {{
-        color: #2B2420 !important;
+    div[data-testid="stMetric"] [data-testid="stMetricLabel"],
+    div[data-testid="stMetric"] [data-testid="stMetricLabel"] * {{
+        color: {TEXT_MUTED_ON_CARD} !important;
+    }}
+    div[data-testid="stMetric"] [data-testid="stMetricValue"],
+    div[data-testid="stMetric"] [data-testid="stMetricValue"] * {{
+        color: {TEXT_DARK_ON_CARD} !important;
+        font-weight: 700;
     }}
 
     /* Day cards */
@@ -218,16 +225,16 @@ if st.session_state.itinerary:
     day_totals = [d.daily_total for d in itinerary.days]
 
     fig, ax = plt.subplots(figsize=(6, 3))
-    fig.patch.set_facecolor("#2B2420")
-    ax.set_facecolor("#2B2420")
+    fig.patch.set_facecolor("#152238")
+    ax.set_facecolor("#152238")
     ax.bar(day_labels, day_totals, color=ACCENT)
-    ax.set_ylabel("Cost (USD)", color="#F0EAE3")
-    ax.set_title(f"Daily cost — {itinerary.city}", color="#F0EAE3")
-    ax.tick_params(colors="#F0EAE3")
+    ax.set_ylabel("Cost (USD)", color="#E7F0F8")
+    ax.set_title(f"Daily cost — {itinerary.city}", color="#E7F0F8")
+    ax.tick_params(colors="#E7F0F8")
     for spine in ax.spines.values():
-        spine.set_color("#B0A89E")
+        spine.set_color("#9FB3C8")
     for i, v in enumerate(day_totals):
-        ax.text(i, v + 0.5, f"${v:.0f}", ha="center", color="#F0EAE3")
+        ax.text(i, v + 0.5, f"${v:.0f}", ha="center", color="#E7F0F8")
     st.pyplot(fig)
 
     # ---------- PDF export ----------

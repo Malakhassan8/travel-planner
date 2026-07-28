@@ -17,9 +17,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 
-# Resolve relative to this file's location, so it works no matter what
-# directory Streamlit is launched from (e.g. /content vs /content/repo).
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+DATA_DIR = "data"  # folder containing cairo.txt, paris.txt, bangkok.txt, lisbon.txt
 
 CITY_FILES = {
     "Cairo": "cairo.txt",
@@ -132,17 +130,7 @@ def search(query: str, k: int = 4, city_filter: str = None):
 
 @st.cache_resource
 def get_llm():
-    """Main LLM for preference extraction and full itinerary generation.
-    temperature=0 keeps these consistent and less prone to inventing things."""
     return ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
-
-
-@st.cache_resource
-def get_regen_llm():
-    """Separate instance with some temperature, used only for regenerating a
-    single day. A little randomness helps it actually explore the available
-    options instead of converging on the same pick every time."""
-    return ChatGroq(model="llama-3.3-70b-versatile", temperature=0.6)
 
 
 # ---------- Step 4: Preference extraction ----------
@@ -154,23 +142,7 @@ pref_prompt = ChatPromptTemplate.from_messages([
      "You extract structured travel preferences from a user's message. "
      "Only use information the user actually stated or clearly implied. "
      "If budget_level isn't explicit, infer it from context. "
-     "Default pace to 'moderate' if not mentioned.\n\n"
-     "IMPORTANT — 'days' is REQUIRED and must always be a positive integer, never null. "
-     "If the user does not explicitly state a number of days or a date range you can "
-     "calculate days from, default to 3.\n\n"
-     "IMPORTANT — budget normalization:\n"
-     "The 'daily_budget_usd' field must always be a PER-DAY amount, in USD.\n"
-     "- If the user gives a per-day figure (phrases like 'a day', 'per day', 'daily', "
-     "'each day'), use that number directly.\n"
-     "- If the user gives a WHOLE-TRIP or TOTAL figure (phrases like 'for the whole trip', "
-     "'total budget', 'overall', 'for the trip', or just a lump sum with no 'per day' "
-     "qualifier alongside a stated number of days), divide it by the number of days "
-     "to get the per-day amount. Example: '$150 for the whole 5-day trip' -> "
-     "daily_budget_usd = 30.\n"
-     "- If it's genuinely ambiguous whether a figure is per-day or total, prefer treating "
-     "it as per-day only when 'a day'/'per day' is explicitly present; otherwise treat it "
-     "as a total and divide by days.\n\n"
-     "{format_instructions}"),
+     "Default pace to 'moderate' if not mentioned.\n\n{format_instructions}"),
     ("user", "{user_message}")
 ]).partial(format_instructions=pref_parser.get_format_instructions())
 
@@ -192,16 +164,59 @@ itinerary_prompt = ChatPromptTemplate.from_messages([
      "- Number of days MUST equal the user's requested trip length.\n"
      "- Activities per day scale with pace: relaxed=2-3, moderate=4, packed=5-6.\n"
      "- Every activity needs a short 'reason' tied to interests/budget/pace.\n"
-     "- Every activity across the ENTIRE itinerary must be DIFFERENT — never repeat or "
-     "reuse the same activity/place on more than one day, even if it fits well.\n"
-     "{budget_target_note}"
+     "- Keep costs realistic and consistent with the budget level.\n"
      "- Only use activities/places mentioned in the context — don't invent unlisted attractions.\n\n"
+     "OUTPUT FORMAT — read carefully, this is strictly enforced:\n"
+     "- Respond with ONLY the raw JSON object. No preamble like 'Here's your itinerary'. "
+     "No explanation before or after. No markdown code fences (no ```).\n"
+     "- Valid JSON only: no trailing commas after the last item in any list or object.\n\n"
      "{format_instructions}"),
     ("user",
      "User preferences:\nCity: {city}\nDays: {days}\nBudget level: {budget_level}\n"
      "Daily budget (USD): {daily_budget_usd}\nInterests: {interests}\nPace: {pace}\n\n"
      "Destination context:\n{context}")
 ]).partial(format_instructions=itinerary_parser.get_format_instructions())
+
+
+def _clean_json_text(text: str) -> str:
+    """LLMs sometimes wrap JSON in prose or markdown fences, or leave a trailing
+    comma before a closing bracket (invalid JSON). Strip both before parsing."""
+    # Drop markdown code fences if present
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
+    # Keep only the outermost { ... } block, dropping any preamble/explanation text
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1:
+        text = text[start:end + 1]
+    # Remove trailing commas before a closing bracket/brace, e.g. "...},\n]" -> "...}\n]"
+    text = re.sub(r",(\s*[}\]])", r"\1", text)
+    return text
+
+
+def _invoke_and_parse(prompt, parser, llm, inputs: dict):
+    """Run prompt|llm, clean the raw text, then parse. If parsing still fails,
+    ask the LLM once to fix its own output before giving up."""
+    raw_chain = prompt | llm
+    response = raw_chain.invoke(inputs)
+    raw_text = response.content if hasattr(response, "content") else str(response)
+
+    cleaned = _clean_json_text(raw_text)
+    try:
+        return parser.parse(cleaned)
+    except Exception:
+        # One repair attempt: show the LLM its own broken output and ask it to fix the JSON only
+        fix_prompt = ChatPromptTemplate.from_messages([
+            ("system",
+             "The following text was supposed to be valid JSON matching a schema, but failed "
+             "to parse. Fix it and return ONLY the corrected raw JSON object — no preamble, "
+             "no markdown fences, no trailing commas.\n\n{format_instructions}"),
+            ("user", "Broken output:\n{broken}")
+        ]).partial(format_instructions=parser.get_format_instructions())
+        fix_chain = fix_prompt | llm
+        fixed_response = fix_chain.invoke({"broken": cleaned})
+        fixed_text = fixed_response.content if hasattr(fixed_response, "content") else str(fixed_response)
+        fixed_cleaned = _clean_json_text(fixed_text)
+        return parser.parse(fixed_cleaned)  # if this still fails, the exception surfaces to the UI
 
 
 def get_context_for_trip(prefs: UserPreferences, k_per_query: int = 3) -> str:
@@ -218,64 +233,24 @@ def get_context_for_trip(prefs: UserPreferences, k_per_query: int = 3) -> str:
 
 def build_itinerary(prefs: UserPreferences) -> Itinerary:
     context = get_context_for_trip(prefs)
-    chain = itinerary_prompt | get_llm() | itinerary_parser
-
-    if prefs.daily_budget_usd:
-        low = round(prefs.daily_budget_usd * 0.8, 2)
-        high = round(prefs.daily_budget_usd * 1.0, 2)
-        budget_target_note = (
-            f"- HARD REQUIREMENT: each day's activities must sum to a daily_total "
-            f"between ${low} and ${high} (80-100% of the ${prefs.daily_budget_usd} daily "
-            f"budget). Choose pricier, better-fitting options from the context as needed "
-            f"to reach this range — do not just pick the cheapest available items.\n"
-        )
-    else:
-        budget_target_note = ""
-
-    return chain.invoke({
+    return _invoke_and_parse(itinerary_prompt, itinerary_parser, get_llm(), {
         "city": prefs.city, "days": prefs.days, "budget_level": prefs.budget_level,
         "daily_budget_usd": prefs.daily_budget_usd, "interests": ", ".join(prefs.interests),
-        "pace": prefs.pace, "context": context, "budget_target_note": budget_target_note,
+        "pace": prefs.pace, "context": context,
     })
 
 
-def regenerate_day(prefs: UserPreferences, day_number: int, itinerary: Itinerary, avoid_note: str = "") -> DayPlan:
-    """Regenerate a single day, avoiding activities already used on other days
-    and keeping the same number of activities as the original day."""
+def regenerate_day(prefs: UserPreferences, day_number: int, itinerary: "Itinerary" = None, avoid_note: str = "") -> DayPlan:
+    """Regenerate a single day, optionally avoiding something the user didn't like.
+    If `itinerary` is passed, activities already used on other days are listed so
+    the regenerated day doesn't just repeat them."""
     context = get_context_for_trip(prefs)
 
-    # Collect activities already used on OTHER days, so we don't repeat them
-    used_elsewhere = [
-        act.name
-        for d in itinerary.days
-        if d.day != day_number
-        for act in d.activities
-    ]
-    used_note = (
-        f"- Do NOT repeat these activities, already used on other days: {', '.join(used_elsewhere)}."
-        if used_elsewhere else ""
-    )
-
-    # Anchor the activity count to what this day originally had
-    original_day = next((d for d in itinerary.days if d.day == day_number), None)
-    target_count = len(original_day.activities) if original_day else None
-    count_note = (
-        f"- This day must have exactly {target_count} activities, matching the original day being replaced."
-        if target_count else ""
-    )
-
-    # Hard numeric budget target, same approach as build_itinerary
-    if prefs.daily_budget_usd:
-        low = round(prefs.daily_budget_usd * 0.8, 2)
-        high = round(prefs.daily_budget_usd * 1.0, 2)
-        budget_target_note = (
-            f"- HARD REQUIREMENT: this day's activities must sum to a daily_total "
-            f"between ${low} and ${high} (80-100% of the ${prefs.daily_budget_usd} daily "
-            f"budget). Choose pricier, better-fitting options from the context as needed "
-            f"to reach this range — do not just pick the cheapest available items.\n"
-        )
-    else:
-        budget_target_note = ""
+    used_elsewhere = []
+    if itinerary is not None:
+        for d in itinerary.days:
+            if d.day != day_number:
+                used_elsewhere.extend(a.name for a in d.activities)
 
     day_parser = PydanticOutputParser(pydantic_object=DayPlan)
     day_prompt = ChatPromptTemplate.from_messages([
@@ -286,21 +261,24 @@ def regenerate_day(prefs: UserPreferences, day_number: int, itinerary: Itinerary
          "- This is day {day_number} of the trip.\n"
          "- Activities scale with pace: relaxed=2-3, moderate=4, packed=5-6.\n"
          "- Every activity needs a 'reason' tied to interests/budget/pace.\n"
-         "{budget_target_note}"
          "- Only use activities/places mentioned in the context.\n"
-         f"{{count_note}}\n{{used_note}}\n{{extra_note}}\n\n{{format_instructions}}"),
+         "- Do not repeat any activity already used on another day of this trip (listed below), "
+         "pick different ones from the context instead.\n"
+         "- If the user gives a note about what to avoid or change, actually swap out the "
+         "relevant activity for a different one — don't just mention the conflict in the reason text.\n"
+         f"{{extra_note}}\n\n"
+         "Already used on other days (avoid repeating): {used_elsewhere}\n\n"
+         "OUTPUT FORMAT — strictly enforced: respond with ONLY the raw JSON object. "
+         "No preamble, no markdown fences, no trailing commas.\n\n{format_instructions}"),
         ("user",
          "City: {city}\nBudget level: {budget_level}\nDaily budget (USD): {daily_budget_usd}\n"
          "Interests: {interests}\nPace: {pace}\n\nContext:\n{context}")
     ]).partial(format_instructions=day_parser.get_format_instructions())
 
-    chain = day_prompt | get_regen_llm() | day_parser
-    return chain.invoke({
+    return _invoke_and_parse(day_prompt, day_parser, get_llm(), {
         "day_number": day_number, "city": prefs.city, "budget_level": prefs.budget_level,
         "daily_budget_usd": prefs.daily_budget_usd, "interests": ", ".join(prefs.interests),
         "pace": prefs.pace, "context": context,
-        "extra_note": f"- Note: user specifically asked to avoid/change this: {avoid_note}" if avoid_note else "",
-        "used_note": used_note,
-        "count_note": count_note,
-        "budget_target_note": budget_target_note,
+        "extra_note": f"- Note: {avoid_note}" if avoid_note else "",
+        "used_elsewhere": ", ".join(used_elsewhere) if used_elsewhere else "none",
     })

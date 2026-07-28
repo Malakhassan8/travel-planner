@@ -46,13 +46,21 @@ if generate_clicked and user_message.strip():
     if "GROQ_API_KEY" not in os.environ:
         st.error("Please add your Groq API key in the sidebar first.")
     else:
-        with st.spinner("Reading your preferences..."):
-            prefs = extract_preferences(user_message)
-            st.session_state.prefs = prefs
+        try:
+            with st.spinner("Reading your preferences..."):
+                prefs = extract_preferences(user_message)
+                st.session_state.prefs = prefs
 
-        with st.spinner(f"Building your {prefs.days}-day {prefs.city} itinerary..."):
-            itinerary = build_itinerary(prefs)
-            st.session_state.itinerary = itinerary
+            with st.spinner(f"Building your {prefs.days}-day {prefs.city} itinerary..."):
+                itinerary = build_itinerary(prefs)
+                st.session_state.itinerary = itinerary
+        except Exception as e:
+            st.error(
+                "Something went wrong generating your itinerary. This can happen if "
+                "the API key is invalid, a rate limit was hit, or the destination "
+                "city isn't in the supported list (Cairo, Paris, Bangkok, Lisbon).\n\n"
+                f"Details: {e}"
+            )
 
 # ---------- Show extracted preferences (transparency) ----------
 if st.session_state.prefs:
@@ -75,20 +83,30 @@ if st.session_state.itinerary:
             st.caption(act.reason)
         st.markdown(f"**Daily total: ${day.daily_total:.0f}**")
 
+        avoid_note = st.text_input(
+            "Anything to avoid or change for this day? (optional)",
+            key=f"avoid_{day.day}",
+            placeholder="e.g. 'less walking' or 'no museums'",
+        )
+
         regen_col, _ = st.columns([1, 4])
         with regen_col:
             if st.button(f"🔁 Regenerate Day {day.day}", key=f"regen_{day.day}"):
-                with st.spinner(f"Regenerating Day {day.day}..."):
-                    # Pass the current itinerary so the regenerated day avoids
-                    # repeating activities already used on other days.
-                    new_day = regenerate_day(prefs, day.day, itinerary)
-                    # Replace this day in the itinerary
-                    for i, d in enumerate(itinerary.days):
-                        if d.day == day.day:
-                            itinerary.days[i] = new_day
-                    itinerary.trip_total = sum(d.daily_total for d in itinerary.days)
-                    st.session_state.itinerary = itinerary
-                    st.rerun()
+                try:
+                    with st.spinner(f"Regenerating Day {day.day}..."):
+                        # Pass the current itinerary so the regenerated day avoids
+                        # repeating activities already used on other days, and the
+                        # optional note so the user can steer what changes.
+                        new_day = regenerate_day(prefs, day.day, itinerary, avoid_note=avoid_note)
+                        # Replace this day in the itinerary
+                        for i, d in enumerate(itinerary.days):
+                            if d.day == day.day:
+                                itinerary.days[i] = new_day
+                        itinerary.trip_total = sum(d.daily_total for d in itinerary.days)
+                        st.session_state.itinerary = itinerary
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Couldn't regenerate Day {day.day} — try again. Details: {e}")
         st.divider()
 
     # ---------- Cost breakdown chart ----------

@@ -188,19 +188,19 @@ if st.session_state.itinerary:
     for day in itinerary.days:
         activities_html = ""
         for act in day.activities:
-            activities_html += f"""
-            <p style='margin-bottom:0.2rem;'><strong>{act.name}</strong> —
-            <span class='activity-cost'>${act.cost_est:.0f}</span> · <em>{act.type}</em></p>
-            <p style='color:{TEXT_MUTED_ON_CARD}; font-size:0.85rem; margin-top:0; margin-bottom:0.8rem;'>{act.reason}</p>
-            """
+            activities_html += (
+                f"<p style='margin-bottom:0.2rem;'><strong>{act.name}</strong> — "
+                f"<span class='activity-cost'>${act.cost_est:.0f}</span> · <em>{act.type}</em></p>"
+                f"<p style='color:{TEXT_MUTED_ON_CARD}; font-size:0.85rem; margin-top:0; margin-bottom:0.8rem;'>{act.reason}</p>"
+            )
 
-        card_html = f"""
-        <div class="day-card">
-            <h3>Day {day.day}</h3>
-            {activities_html}
-            <div class='day-total'>Daily total: <b>${day.daily_total:.0f}</b></div>
-        </div>
-        """
+        card_html = (
+            f"<div class='day-card'>"
+            f"<h3>Day {day.day}</h3>"
+            f"{activities_html}"
+            f"<div class='day-total'>Daily total: <b>${day.daily_total:.0f}</b></div>"
+            f"</div>"
+        )
         st.markdown(card_html, unsafe_allow_html=True)
 
         avoid_note = st.text_input(

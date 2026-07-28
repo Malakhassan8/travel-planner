@@ -69,19 +69,37 @@ st.markdown(f"""
         border: none;
         color: white;
     }}
+    .stButton > button[kind="primary"] p {{
+        color: white !important;
+    }}
     .stButton > button[kind="primary"]:hover {{
         background-color: {ACCENT_SOFT};
     }}
     .stButton > button:not([kind="primary"]) {{
         border: 2px solid {ACCENT};
-        color: {TEXT_DARK_ON_CARD};
         background-color: {BG_CARD};
         font-weight: 600;
+    }}
+    .stButton > button:not([kind="primary"]) p {{
+        color: {TEXT_DARK_ON_CARD} !important;
     }}
     .stButton > button:not([kind="primary"]):hover {{
         border-color: {ACCENT};
         background-color: {ACCENT_SOFT};
-        color: {TEXT_DARK_ON_CARD};
+    }}
+
+    /* Download button (separate component from st.button, needs its own rules) */
+    div[data-testid="stDownloadButton"] > button {{
+        border: 2px solid {ACCENT};
+        background-color: {BG_CARD};
+        font-weight: 600;
+    }}
+    div[data-testid="stDownloadButton"] > button p {{
+        color: {TEXT_DARK_ON_CARD} !important;
+    }}
+    div[data-testid="stDownloadButton"] > button:hover {{
+        border-color: {ACCENT};
+        background-color: {ACCENT_SOFT};
     }}
 
     /* Metric (trip total) — target the specific testids so the value is never invisible */
@@ -189,7 +207,7 @@ if st.session_state.itinerary:
         activities_html = ""
         for act in day.activities:
             activities_html += (
-                f"<p style='margin-bottom:0.2rem;'><strong>{act.name}</strong> — "
+                f"<p style='margin-bottom:0.2rem; color:{TEXT_DARK_ON_CARD};'><strong>{act.name}</strong> — "
                 f"<span class='activity-cost'>${act.cost_est:.0f}</span> · <em>{act.type}</em></p>"
                 f"<p style='color:{TEXT_MUTED_ON_CARD}; font-size:0.85rem; margin-top:0; margin-bottom:0.8rem;'>{act.reason}</p>"
             )

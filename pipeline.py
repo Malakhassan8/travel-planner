@@ -192,11 +192,9 @@ itinerary_prompt = ChatPromptTemplate.from_messages([
      "- Number of days MUST equal the user's requested trip length.\n"
      "- Activities per day scale with pace: relaxed=2-3, moderate=4, packed=5-6.\n"
      "- Every activity needs a short 'reason' tied to interests/budget/pace.\n"
-     "- Keep costs realistic and consistent with the budget level, AND aim to use "
-     "roughly 80-100% of the stated daily_budget_usd each day — don't default to the "
-     "cheapest possible options if better-fitting, slightly pricier ones in the context "
-     "would still fit within budget. Underspending significantly is just as much a "
-     "mismatch as overspending.\n"
+     "- Every activity across the ENTIRE itinerary must be DIFFERENT — never repeat or "
+     "reuse the same activity/place on more than one day, even if it fits well.\n"
+     "{budget_target_note}"
      "- Only use activities/places mentioned in the context — don't invent unlisted attractions.\n\n"
      "{format_instructions}"),
     ("user",
@@ -221,10 +219,23 @@ def get_context_for_trip(prefs: UserPreferences, k_per_query: int = 3) -> str:
 def build_itinerary(prefs: UserPreferences) -> Itinerary:
     context = get_context_for_trip(prefs)
     chain = itinerary_prompt | get_llm() | itinerary_parser
+
+    if prefs.daily_budget_usd:
+        low = round(prefs.daily_budget_usd * 0.8, 2)
+        high = round(prefs.daily_budget_usd * 1.0, 2)
+        budget_target_note = (
+            f"- HARD REQUIREMENT: each day's activities must sum to a daily_total "
+            f"between ${low} and ${high} (80-100% of the ${prefs.daily_budget_usd} daily "
+            f"budget). Choose pricier, better-fitting options from the context as needed "
+            f"to reach this range — do not just pick the cheapest available items.\n"
+        )
+    else:
+        budget_target_note = ""
+
     return chain.invoke({
         "city": prefs.city, "days": prefs.days, "budget_level": prefs.budget_level,
         "daily_budget_usd": prefs.daily_budget_usd, "interests": ", ".join(prefs.interests),
-        "pace": prefs.pace, "context": context,
+        "pace": prefs.pace, "context": context, "budget_target_note": budget_target_note,
     })
 
 
@@ -253,6 +264,19 @@ def regenerate_day(prefs: UserPreferences, day_number: int, itinerary: Itinerary
         if target_count else ""
     )
 
+    # Hard numeric budget target, same approach as build_itinerary
+    if prefs.daily_budget_usd:
+        low = round(prefs.daily_budget_usd * 0.8, 2)
+        high = round(prefs.daily_budget_usd * 1.0, 2)
+        budget_target_note = (
+            f"- HARD REQUIREMENT: this day's activities must sum to a daily_total "
+            f"between ${low} and ${high} (80-100% of the ${prefs.daily_budget_usd} daily "
+            f"budget). Choose pricier, better-fitting options from the context as needed "
+            f"to reach this range — do not just pick the cheapest available items.\n"
+        )
+    else:
+        budget_target_note = ""
+
     day_parser = PydanticOutputParser(pydantic_object=DayPlan)
     day_prompt = ChatPromptTemplate.from_messages([
         ("system",
@@ -262,9 +286,7 @@ def regenerate_day(prefs: UserPreferences, day_number: int, itinerary: Itinerary
          "- This is day {day_number} of the trip.\n"
          "- Activities scale with pace: relaxed=2-3, moderate=4, packed=5-6.\n"
          "- Every activity needs a 'reason' tied to interests/budget/pace.\n"
-         "- Aim to use roughly 80-100% of the stated daily_budget_usd — don't default to "
-         "the cheapest possible options if better-fitting, slightly pricier ones in the "
-         "context would still fit within budget.\n"
+         "{budget_target_note}"
          "- Only use activities/places mentioned in the context.\n"
          f"{{count_note}}\n{{used_note}}\n{{extra_note}}\n\n{{format_instructions}}"),
         ("user",
@@ -280,4 +302,5 @@ def regenerate_day(prefs: UserPreferences, day_number: int, itinerary: Itinerary
         "extra_note": f"- Note: user specifically asked to avoid/change this: {avoid_note}" if avoid_note else "",
         "used_note": used_note,
         "count_note": count_note,
+        "budget_target_note": budget_target_note,
     })

@@ -155,6 +155,9 @@ pref_prompt = ChatPromptTemplate.from_messages([
      "Only use information the user actually stated or clearly implied. "
      "If budget_level isn't explicit, infer it from context. "
      "Default pace to 'moderate' if not mentioned.\n\n"
+     "IMPORTANT — 'days' is REQUIRED and must always be a positive integer, never null. "
+     "If the user does not explicitly state a number of days or a date range you can "
+     "calculate days from, default to 3.\n\n"
      "IMPORTANT — budget normalization:\n"
      "The 'daily_budget_usd' field must always be a PER-DAY amount, in USD.\n"
      "- If the user gives a per-day figure (phrases like 'a day', 'per day', 'daily', "
@@ -189,7 +192,11 @@ itinerary_prompt = ChatPromptTemplate.from_messages([
      "- Number of days MUST equal the user's requested trip length.\n"
      "- Activities per day scale with pace: relaxed=2-3, moderate=4, packed=5-6.\n"
      "- Every activity needs a short 'reason' tied to interests/budget/pace.\n"
-     "- Keep costs realistic and consistent with the budget level.\n"
+     "- Keep costs realistic and consistent with the budget level, AND aim to use "
+     "roughly 80-100% of the stated daily_budget_usd each day — don't default to the "
+     "cheapest possible options if better-fitting, slightly pricier ones in the context "
+     "would still fit within budget. Underspending significantly is just as much a "
+     "mismatch as overspending.\n"
      "- Only use activities/places mentioned in the context — don't invent unlisted attractions.\n\n"
      "{format_instructions}"),
     ("user",
@@ -255,6 +262,9 @@ def regenerate_day(prefs: UserPreferences, day_number: int, itinerary: Itinerary
          "- This is day {day_number} of the trip.\n"
          "- Activities scale with pace: relaxed=2-3, moderate=4, packed=5-6.\n"
          "- Every activity needs a 'reason' tied to interests/budget/pace.\n"
+         "- Aim to use roughly 80-100% of the stated daily_budget_usd — don't default to "
+         "the cheapest possible options if better-fitting, slightly pricier ones in the "
+         "context would still fit within budget.\n"
          "- Only use activities/places mentioned in the context.\n"
          f"{{count_note}}\n{{used_note}}\n{{extra_note}}\n\n{{format_instructions}}"),
         ("user",

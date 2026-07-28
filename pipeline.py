@@ -154,7 +154,20 @@ pref_prompt = ChatPromptTemplate.from_messages([
      "You extract structured travel preferences from a user's message. "
      "Only use information the user actually stated or clearly implied. "
      "If budget_level isn't explicit, infer it from context. "
-     "Default pace to 'moderate' if not mentioned.\n\n{format_instructions}"),
+     "Default pace to 'moderate' if not mentioned.\n\n"
+     "IMPORTANT — budget normalization:\n"
+     "The 'daily_budget_usd' field must always be a PER-DAY amount, in USD.\n"
+     "- If the user gives a per-day figure (phrases like 'a day', 'per day', 'daily', "
+     "'each day'), use that number directly.\n"
+     "- If the user gives a WHOLE-TRIP or TOTAL figure (phrases like 'for the whole trip', "
+     "'total budget', 'overall', 'for the trip', or just a lump sum with no 'per day' "
+     "qualifier alongside a stated number of days), divide it by the number of days "
+     "to get the per-day amount. Example: '$150 for the whole 5-day trip' -> "
+     "daily_budget_usd = 30.\n"
+     "- If it's genuinely ambiguous whether a figure is per-day or total, prefer treating "
+     "it as per-day only when 'a day'/'per day' is explicitly present; otherwise treat it "
+     "as a total and divide by days.\n\n"
+     "{format_instructions}"),
     ("user", "{user_message}")
 ]).partial(format_instructions=pref_parser.get_format_instructions())
 

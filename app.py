@@ -67,17 +67,21 @@ st.markdown(f"""
     .stButton > button[kind="primary"] {{
         background-color: {ACCENT};
         border: none;
+        color: white;
     }}
     .stButton > button[kind="primary"]:hover {{
         background-color: {ACCENT_SOFT};
     }}
     .stButton > button:not([kind="primary"]) {{
-        border: 1px solid {ACCENT_SOFT};
-        color: {ACCENT_SOFT};
+        border: 2px solid {ACCENT};
+        color: {TEXT_DARK_ON_CARD};
+        background-color: {BG_CARD};
+        font-weight: 600;
     }}
     .stButton > button:not([kind="primary"]):hover {{
         border-color: {ACCENT};
-        color: {ACCENT};
+        background-color: {ACCENT_SOFT};
+        color: {TEXT_DARK_ON_CARD};
     }}
 
     /* Metric (trip total) — target the specific testids so the value is never invisible */
@@ -182,16 +186,22 @@ if st.session_state.itinerary:
     st.metric("Trip total", f"${itinerary.trip_total:.0f}")
 
     for day in itinerary.days:
-        st.markdown('<div class="day-card">', unsafe_allow_html=True)
-        st.markdown(f"### Day {day.day}")
+        activities_html = ""
         for act in day.activities:
-            st.markdown(
-                f"**{act.name}** — <span class='activity-cost'>${act.cost_est:.0f}</span> · _{act.type}_",
-                unsafe_allow_html=True,
-            )
-            st.caption(act.reason)
-        st.markdown(f"<div class='day-total'>Daily total: <b>${day.daily_total:.0f}</b></div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+            activities_html += f"""
+            <p style='margin-bottom:0.2rem;'><strong>{act.name}</strong> —
+            <span class='activity-cost'>${act.cost_est:.0f}</span> · <em>{act.type}</em></p>
+            <p style='color:{TEXT_MUTED_ON_CARD}; font-size:0.85rem; margin-top:0; margin-bottom:0.8rem;'>{act.reason}</p>
+            """
+
+        card_html = f"""
+        <div class="day-card">
+            <h3>Day {day.day}</h3>
+            {activities_html}
+            <div class='day-total'>Daily total: <b>${day.daily_total:.0f}</b></div>
+        </div>
+        """
+        st.markdown(card_html, unsafe_allow_html=True)
 
         avoid_note = st.text_input(
             "Anything to avoid or change for this day? (optional)",

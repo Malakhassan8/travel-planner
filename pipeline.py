@@ -17,6 +17,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 
+# Resolve relative to this file's location, so it works no matter what
+# directory Streamlit is launched from (e.g. /content vs /content/repo).
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 CITY_FILES = {
@@ -130,7 +132,17 @@ def search(query: str, k: int = 4, city_filter: str = None):
 
 @st.cache_resource
 def get_llm():
+    """Main LLM for preference extraction and full itinerary generation.
+    temperature=0 keeps these consistent and less prone to inventing things."""
     return ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+
+
+@st.cache_resource
+def get_regen_llm():
+    """Separate instance with some temperature, used only for regenerating a
+    single day. A little randomness helps it actually explore the available
+    options instead of converging on the same pick every time."""
+    return ChatGroq(model="llama-3.3-70b-versatile", temperature=0.6)
 
 
 # ---------- Step 4: Preference extraction ----------
@@ -237,12 +249,12 @@ def regenerate_day(prefs: UserPreferences, day_number: int, itinerary: Itinerary
          "Interests: {interests}\nPace: {pace}\n\nContext:\n{context}")
     ]).partial(format_instructions=day_parser.get_format_instructions())
 
-    chain = day_prompt | get_llm() | day_parser
+    chain = day_prompt | get_regen_llm() | day_parser
     return chain.invoke({
         "day_number": day_number, "city": prefs.city, "budget_level": prefs.budget_level,
         "daily_budget_usd": prefs.daily_budget_usd, "interests": ", ".join(prefs.interests),
         "pace": prefs.pace, "context": context,
-        "extra_note": f"- Note: {avoid_note}" if avoid_note else "",
+        "extra_note": f"- Note: user specifically asked to avoid/change this: {avoid_note}" if avoid_note else "",
         "used_note": used_note,
         "count_note": count_note,
     })

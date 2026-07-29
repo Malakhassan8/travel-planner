@@ -92,9 +92,17 @@ print(public_url)
 
 ---
 
-# 📸 Demo
+## 🎥 Demo
 
-*Add screenshots, GIFs, or a demo video here.*
+A short walkthrough of the Travel Itinerary Planner showcasing:
+
+- Natural language trip input
+- AI-powered itinerary generation
+- Per-day itinerary regeneration
+- Cost breakdown visualization
+- PDF itinerary export
+
+▶️ **Watch the demo:** https://github.com/Malakhassan8/travel-planner/issues/1
 
 ---
 

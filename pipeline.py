@@ -1,9 +1,3 @@
-"""
-pipeline.py - all the RAG + chain logic from Steps 2-5, consolidated for Streamlit.
-Uses st.cache_resource so the embedding model, FAISS index, and LLM are only
-loaded/built once per session, not on every rerun.
-"""
-
 import re
 import os
 from typing import List, Optional
@@ -27,7 +21,7 @@ CITY_FILES = {
 }
 
 
-# ---------- Schemas ----------
+# 1. Schemas 
 
 class UserPreferences(BaseModel):
     city: str = Field(description="Destination city")
@@ -57,8 +51,8 @@ class Itinerary(BaseModel):
     days: List[DayPlan]
     trip_total: float
 
-
-# ---------- Step 2: Chunking ----------
+-----------------------------
+#  2. Chunking 
 
 def chunk_city_file(filepath: str, city: str) -> List[Document]:
     with open(filepath, "r", encoding="utf-8") as f:
@@ -87,7 +81,8 @@ def load_all_docs():
     return all_docs
 
 
-# ---------- Step 3: Embeddings + FAISS ----------
+-----------------------------
+#  3. Embeddings + FAISS 
 
 @st.cache_resource
 def load_embed_model():
@@ -126,14 +121,14 @@ def search(query: str, k: int = 4, city_filter: str = None):
     return results
 
 
-# ---------- LLM ----------
+#  LLM 
 
 @st.cache_resource
 def get_llm():
     return ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
 
 
-# ---------- Step 4: Preference extraction ----------
+#  4. Preference extraction 
 
 pref_parser = PydanticOutputParser(pydantic_object=UserPreferences)
 
@@ -152,7 +147,7 @@ def extract_preferences(user_message: str) -> UserPreferences:
     return chain.invoke({"user_message": user_message})
 
 
-# ---------- Step 5: Itinerary builder ----------
+#  5. Itinerary builder 
 
 itinerary_parser = PydanticOutputParser(pydantic_object=Itinerary)
 

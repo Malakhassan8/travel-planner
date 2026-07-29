@@ -51,7 +51,7 @@ class Itinerary(BaseModel):
     days: List[DayPlan]
     trip_total: float
 
------------------------------
+# -----------------------------
 #  2. Chunking 
 
 def chunk_city_file(filepath: str, city: str) -> List[Document]:
@@ -81,7 +81,7 @@ def load_all_docs():
     return all_docs
 
 
------------------------------
+# -----------------------------
 #  3. Embeddings + FAISS 
 
 @st.cache_resource

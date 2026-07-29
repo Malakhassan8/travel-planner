@@ -27,11 +27,20 @@ TEXT_MUTED = "#9FB3C8"    # secondary/caption text on dark background
 TEXT_DARK_ON_CARD = "#152238"    # strong dark navy text on light cards (numbers, headers)
 TEXT_MUTED_ON_CARD = "#5A6B7D"   # secondary text on light cards
 
+BG_IMAGE_URL = "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1600&q=80"  # world map / travel theme
+
 st.markdown(f"""
 <style>
-    /* App-wide background */
+    /* App-wide background: dark navy gradient overlay + travel-themed image, matched to the palette */
     .stApp {{
         background-color: {BG_APP};
+        background-image:
+            linear-gradient(rgba(21, 34, 56, 0.92), rgba(21, 34, 56, 0.92)),
+            url("{BG_IMAGE_URL}");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        background-repeat: no-repeat;
     }}
 
     /* Sidebar background */
